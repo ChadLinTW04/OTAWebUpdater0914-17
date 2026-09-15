@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>ESP32 OTA Firmware Manager</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family:
+        Arial,
+        "Microsoft JhengHei",
+        sans-serif;
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+header {
+    background: linear-gradient(
+        135deg,
+        #0f172a,
+        #1e3a8a
+    );
+    color: white;
+    padding: 24px;
+}
+
+header h1 {
+    margin: 0 0 8px 0;
+    font-size: 26px;
+}
+
+header p {
+    margin: 0;
+    opacity: .8;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 25px auto;
+    padding: 0 15px;
+}
+
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow:
+        0 4px 15px rgba(0,0,0,.08);
+}
+
+.card h2 {
+    margin-top: 0;
+    font-size: 20px;
+}
+
+.row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.field {
+    flex: 1;
+    min-width: 220px;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 7px;
+}
+
+input[type="text"],
+input[type="file"],
+textarea {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    padding: 10px;
+    font-size: 15px;
+}
+
+textarea {
+    min-height: 500px;
+    resize: vertical;
+    font-family:
+        Consolas,
+        "Courier New",
+        monospace;
+    line-height: 1.5;
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+button {
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: #2563eb;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.btn-green {
+    background: #16a34a;
+    color: white;
+}
+
+.btn-gray {
+    background: #64748b;
+    color: white;
+}
+
+.status {
+    padding: 15px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    margin-top: 15px;
+    white-space: pre-line;
+}
+
+.success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.preview {
+    background: #020617;
+    color: #cbd5e1;
+    border-radius: 8px;
+    padding: 15px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+.version-list {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.version-list th,
+.version-list td {
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+}
+
+.version-list th {
+    background: #f8fafc;
+}
+
+footer {
+    text-align: center;
+    padding: 25px;
+    color: #64748b;
+}
+
+@media(max-width:700px) {
+
+    header h1 {
+        font-size: 21px;
+    }
+
+    textarea {
+        min-height: 400px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+
+    <h1>🚀 ESP32 OTA Firmware Manager</h1>
+
+    <p>
+        ESP32 Firmware 版本管理與 OTA 發布工具
+    </p>
+
+</header>
+
+
+<div class="container">
+
+
+    <!-- 基本設定 -->
+
+    <div class="card">
+
+        <h2>⚙️ Firmware 設定</h2>
+
+        <div class="row">
+
+            <div class="field">
+
+                <label>
+                    目前版本
+                </label>
+
+                <input
+                    type="text"
+                    id="currentVersion"
+                    value="0.5"
+                >
+
+            </div>
+
+
+            <div class="field">
+
+                <label>
+                    新版本
+                </label>
+
+                <input
+                    type="text"
+                    id="newVersion"
+                    value="0.6"
+                    placeholder="例如：0.6"
+                >
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- GitHub 設定 -->
+
+    <div class="card">
+
+        <h2>☁️ GitHub 設定</h2>
+
+        <div class="row">
+
+            <div class="field">
+
+                <label>
+                    GitHub Pages 網址
+                </label>
+
+                <input
+                    type="text"
+                    id="githubPages"
+                    value="https://chadlintw04.github.io/OTAWebUpdater0914-17"
+                >
+
+            </div>
+
+        </div>
+
+        <p style="color:#64748b">
+
+            此欄位用來產生 ESP32 OTA 使用的
+            <code>bin_url</code>。
+
+        </p>
+
+    </div>
+
+
+    <!-- 原始碼 -->
+
+    <div class="card">
+
+        <h2>📝 ESP32 程式碼</h2>
+
+        <textarea id="sourceCode">
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Update.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+const char* currentVersion = "0.6";
+
+const char* jsonUrl =
+"https://chadlintw04.github.io/OTAWebUpdater0914-17/version.json";
+
+void setup()
+{
+    Serial.begin(115200);
+
+    // ESP32 setup
+}
+
+void loop()
+{
+    // ESP32 loop
+}
+</textarea>
+
+    </div>
+
+
+    <!-- BIN -->
+
+    <div class="card">
+
+        <h2>📦 Firmware BIN</h2>
+
+        <input
+            type="file"
+            id="binFile"
+            accept=".bin"
+        >
+
+        <div
+            id="binInfo"
+            class="status"
+        >
+            尚未選擇 Firmware
+        </div>
+
+    </div>
+
+
+    <!-- 發布 -->
+
+    <div class="card">
+
+        <h2>🚀 發布新版</h2>
+
+        <button
+            class="btn-primary"
+            onclick="generateRelease()"
+        >
+            產生新版
+        </button>
+
+        <button
+            class="btn-green"
+            onclick="downloadVersionJson()"
+        >
+            下載 version.json
+        </button>
+
+        <button
+            class="btn-gray"
+            onclick="downloadSource()"
+        >
+            下載 .ino
+        </button>
+
+
+        <div
+            id="status"
+            class="status"
+        >
+            等待操作...
+        </div>
+
+    </div>
+
+
+    <!-- version.json -->
+
+    <div class="card">
+
+        <h2>📄 version.json</h2>
+
+        <div
+            id="jsonPreview"
+            class="preview"
+        >
+        </div>
+
+    </div>
+
+
+    <!-- 發布檔案 -->
+
+    <div class="card">
+
+        <h2>📁 發布檔案名稱</h2>
+
+        <table class="version-list">
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        類型
+                    </th>
+
+                    <th>
+                        檔案
+                    </th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                <tr>
+
+                    <td>
+                        Arduino 原始碼
+                    </td>
+
+                    <td id="sourceFilename">
+                        -
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td>
+                        Firmware
+                    </td>
+
+                    <td id="binFilename">
+                        -
+                    </td>
+
+                </tr>
+
+                <tr>
+
+                    <td>
+                        OTA JSON
+                    </td>
+
+                    <td>
+                        version.json
+                    </td>
+
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+</div>
+
+
+<footer>
+
+    ESP32 OTA Firmware Manager
+
+</footer>
+
+
+<script>
+
+
+let selectedBin = null;
+
+
+/*
+    初始化
+*/
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function()
+    {
+        updatePreview();
+    }
+);
+
+
+/*
+    BIN 檔案
+*/
+
+document
+.getElementById("binFile")
+.addEventListener(
+    "change",
+    function(event)
+    {
+
+        selectedBin =
+            event.target.files[0];
+
+        const info =
+            document.getElementById(
+                "binInfo"
+            );
+
+        if (!selectedBin)
+        {
+
+            info.innerText =
+                "尚未選擇 Firmware";
+
+            return;
+
+        }
+
+
+        const size =
+            selectedBin.size;
+
+
+        const mb =
+            (
+                size /
+                1024 /
+                1024
+            ).toFixed(2);
+
+
+        info.className =
+            "status success";
+
+
+        info.innerText =
+            "Firmware 已選擇\n" +
+            "檔名：" +
+            selectedBin.name +
+            "\n" +
+            "大小：" +
+            mb +
+            " MB";
+
+
+        updatePreview();
+
+    }
+);
+
+
+/*
+    取得版本
+*/
+
+function getVersion()
+{
+
+    return document
+        .getElementById(
+            "newVersion"
+        )
+        .value
+        .trim();
+
+}
+
+
+/*
+    產生 Firmware 名稱
+*/
+
+function getBinFilename()
+{
+
+    return (
+        "esp32-v" +
+        getVersion() +
+        ".bin"
+    );
+
+}
+
+
+/*
+    產生原始碼名稱
+*/
+
+function getSourceFilename()
+{
+
+    return (
+        "esp32-v" +
+        getVersion() +
+        ".ino"
+    );
+
+}
+
+
+/*
+    產生 version.json
+*/
+
+function createVersionJson()
+{
+
+    const version =
+        getVersion();
+
+
+    const baseUrl =
+        document
+        .getElementById(
+            "githubPages"
+        )
+        .value
+        .trim()
+        .replace(/\/$/, "");
+
+
+    const binUrl =
+        baseUrl +
+        "/firmware/" +
+        getBinFilename();
+
+
+    return {
+
+        version:
+            version,
+
+        bin_url:
+            binUrl
+
+    };
+
+}
+
+
+/*
+    更新 JSON 預覽
+*/
+
+function updatePreview()
+{
+
+    const json =
+        createVersionJson();
+
+
+    document
+    .getElementById(
+        "jsonPreview"
+    )
+    .innerText =
+        JSON.stringify(
+            json,
+            null,
+            2
+        );
+
+
+    document
+    .getElementById(
+        "sourceFilename"
+    )
+    .innerText =
+        getSourceFilename();
+
+
+    document
+    .getElementById(
+        "binFilename"
+    )
+    .innerText =
+        getBinFilename();
+
+}
+
+
+/*
+    版本號輸入
+*/
+
+document
+.getElementById(
+    "newVersion"
+)
+.addEventListener(
+    "input",
+    updatePreview
+);
+
+
+document
+.getElementById(
+    "githubPages"
+)
+.addEventListener(
+    "input",
+    updatePreview
+);
+
+
+/*
+    產生新版
+*/
+
+function generateRelease()
+{
+
+    const version =
+        getVersion();
+
+
+    if (!version)
+    {
+
+        showStatus(
+            "請輸入新版本號。",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (!/^[0-9]+(\\.[0-9]+)*$/.test(version))
+    {
+
+        showStatus(
+            "版本格式錯誤。\n" +
+            "例如：0.6、1.0、1.2.3",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (!selectedBin)
+    {
+
+        showStatus(
+            "請選擇 .bin Firmware。",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    updatePreview();
+
+
+    showStatus(
+        "新版 v." +
+        version +
+        " 已準備完成。\n\n" +
+
+        "請下載以下檔案：\n" +
+
+        "1. " +
+        getSourceFilename() +
+        "\n" +
+
+        "2. " +
+        getBinFilename() +
+        "\n" +
+
+        "3. version.json\n\n" +
+
+        "接著將它們放到 GitHub 對應目錄。",
+        "success"
+    );
+
+}
+
+
+/*
+    顯示狀態
+*/
+
+function showStatus(
+    message,
+    type
+)
+{
+
+    const status =
+        document.getElementById(
+            "status"
+        );
+
+
+    status.className =
+        "status " +
+        type;
+
+
+    status.innerText =
+        message;
+
+}
+
+
+/*
+    下載檔案
+*/
+
+function downloadFile(
+    content,
+    filename,
+    type
+)
+{
+
+    const blob =
+        new Blob(
+            [content],
+            {
+                type: type
+            }
+        );
+
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+
+    const a =
+        document.createElement(
+            "a"
+        );
+
+
+    a.href = url;
+
+    a.download =
+        filename;
+
+
+    document
+        .body
+        .appendChild(a);
+
+
+    a.click();
+
+
+    a.remove();
+
+
+    URL.revokeObjectURL(
+        url
+    );
+
+}
+
+
+/*
+    下載 version.json
+*/
+
+function downloadVersionJson()
+{
+
+    const json =
+        createVersionJson();
+
+
+    downloadFile(
+        JSON.stringify(
+            json,
+            null,
+            2
+        ),
+        "version.json",
+        "application/json"
+    );
+
+}
+
+
+/*
+    下載 .ino
+*/
+
+function downloadSource()
+{
+
+    const code =
+        document
+        .getElementById(
+            "sourceCode"
+        )
+        .value;
+
+
+    downloadFile(
+        code,
+        getSourceFilename(),
+        "text/plain"
+    );
+
+}
+
+
+</script>
+
+</body>
+</html>
